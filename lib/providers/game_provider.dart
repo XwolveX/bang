@@ -89,6 +89,50 @@ class GameNotifier extends StateNotifier<GameState> {
     if (state.phase != GamePhase.draw) return;
 
     final currentPlayer = state.currentPlayer;
+
+    // ── Kiểm tra JAIL ──
+    if (currentPlayer.isInJail) {
+      final checkCard = state.deck.isNotEmpty
+          ? state.deck.first
+          : state.discard.first;
+
+      // Bỏ lá bài đã lật vào discard
+      final newDeck = state.deck.isNotEmpty
+          ? state.deck.skip(1).toList()
+          : state.deck;
+      final newDiscard = [...state.discard, checkCard];
+
+      if (checkCard.suit == Suit.hearts) {
+        // Ra Hoa → thoát tù, chơi bình thường
+        final freed = currentPlayer.copyWith(isInJail: false);
+        state = state.copyWith(
+          players: state.players
+              .map((p) => p.id == freed.id ? freed : p)
+              .toList(),
+          deck: newDeck,
+          discard: newDiscard,
+          phase: GamePhase.play,
+          actionLog: [...state.actionLog,
+            '${currentPlayer.name} thoát tù! (ra ♥)'],
+        );
+      } else {
+        // Không ra Hoa → mất lượt, reset jail
+        final freed = currentPlayer.copyWith(isInJail: false);
+        state = state.copyWith(
+          players: state.players
+              .map((p) => p.id == freed.id ? freed : p)
+              .toList(),
+          deck: newDeck,
+          discard: newDiscard,
+          actionLog: [...state.actionLog,
+            '${currentPlayer.name} mất lượt vì Jail!'],
+        );
+        _nextTurn(); // ← bỏ lượt ngay
+      }
+      return;
+    }
+
+    // ── Rút bài bình thường ──
     final (newState, drawn) = CharacterAbilityService.onDrawPhase(
       state: state,
       player: currentPlayer,
