@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/models/player_model.dart';
 import '../core/enums/game_enums.dart';
+import '../core/theme/app_theme.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class PlayerBoard extends StatelessWidget {
   final PlayerModel player;
@@ -16,6 +18,32 @@ class PlayerBoard extends StatelessWidget {
     this.onTap,
   });
 
+  Gradient? _getBoardGradient() {
+    if (!player.isAlive) return null;
+    if (isCurrentTurn) {
+      return const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [Color(0xFF8B5A2B), Color(0xFF4A2F13)],
+      );
+    }
+    if (isTargetable) {
+      return LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          AppTheme.bloodRed.withOpacity(0.4),
+          const Color(0xFF3D2317).withOpacity(0.6),
+        ],
+      );
+    }
+    return const LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [Color(0xFF6E4720), Color(0xFF3D2317)],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -24,98 +52,190 @@ class PlayerBoard extends StatelessWidget {
         duration: const Duration(milliseconds: 300),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: _getBoardColor(),
+          color: player.isAlive ? null : Colors.black87,
+          gradient: _getBoardGradient(),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: _getBorderColor(),
             width: isCurrentTurn || isTargetable ? 2 : 1,
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Tên + Role indicator
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // ⭐ Sheriff luôn lộ role
-                if (player.role == Role.sheriff)
-                  const Icon(Icons.star, color: Color(0xFFD4AF37), size: 12),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    player.name,
-                    style: TextStyle(
-                      color: player.isAlive ? Colors.white : Colors.white30,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
-
-            const SizedBox(height: 4),
-
-            // Nhân vật
-            Text(
-              player.character.displayName,
-              style: const TextStyle(
-                color: Color(0xFF8B7355),
-                fontSize: 9,
+            if (isCurrentTurn)
+              BoxShadow(
+                color: AppTheme.goldAccent.withOpacity(0.3),
+                blurRadius: 8,
+                spreadRadius: 1,
               ),
-            ),
-
-            const SizedBox(height: 6),
-
-            // HP tokens
-            _HpBar(hp: player.hp, maxHp: player.maxHp),
-
-            const SizedBox(height: 4),
-
-            // Số bài trên tay + trang bị
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _InfoChip(
-                  icon: Icons.style,
-                  value: '${player.hand.length}',
-                  color: Colors.white54,
-                ),
-                const SizedBox(width: 4),
-                if (player.equipment.isNotEmpty)
-                  _InfoChip(
-                    icon: Icons.shield,
-                    value: '${player.equipment.length}',
-                    color: const Color(0xFF4CAF50),
-                  ),
-                if (player.isInJail)
-                  const Icon(Icons.lock, color: Colors.red, size: 12),
-              ],
-            ),
           ],
         ),
-      ),
-    );
-  }
+        child: Stack(
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Tên + Role indicator
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // ⭐ Sheriff luôn lộ role
+                    if (player.role == Role.sheriff)
+                      Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD4AF37),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 2,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: const Color(0xFF8B7355),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.star,
+                          color: Color(0xFF2C1810),
+                          size: 10,
+                        ),
+                      ),
+                    Flexible(
+                      child: Text(
+                        player.name,
+                        style: TextStyle(
+                          color: player.isAlive ? AppTheme.goldAccent : Colors.white30,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
 
-  Color _getBoardColor() {
-    if (!player.isAlive) return const Color(0xFF1A1A1A);
-    if (isCurrentTurn) return const Color(0xFF3D2317);
-    if (isTargetable) return const Color(0xFF2D1A0E);
-    return const Color(0xFF2C1810);
+                const SizedBox(height: 2),
+
+                // Nhân vật
+                Text(
+                  player.character.displayName,
+                  style: const TextStyle(
+                    color: AppTheme.goldDim,
+                    fontSize: 10,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                // HP tokens (Bullets)
+                _HpBar(hp: player.hp, maxHp: player.maxHp),
+
+                const SizedBox(height: 6),
+
+                // Số bài trên tay + trang bị
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _InfoChip(
+                      icon: Icons.style,
+                      value: '${player.hand.length}',
+                      color: AppTheme.parchment,
+                    ),
+                    const SizedBox(width: 6),
+                    if (player.equipment.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.shield,
+                        value: '${player.equipment.length}',
+                        color: Colors.greenAccent,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+
+            // Jail Overlay
+            if (player.isInJail && player.isAlive)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 4 Jail bars
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(4, (index) => Container(
+                          width: 3,
+                          decoration: BoxDecoration(
+                            color: Colors.blueGrey.shade400.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.5),
+                                blurRadius: 1,
+                                offset: const Offset(1, 0),
+                              ),
+                            ],
+                          ),
+                        )),
+                      ),
+                      // Prominent brass padlock in the center
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC5A059),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: const Color(0xFF8B7355),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.lock_outline,
+                          color: Color(0xFF2C1810),
+                          size: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ).animate(target: isTargetable ? 1 : 0)
+       .shake(hz: 4, curve: Curves.easeInOutCubic, duration: 300.ms)
+       .tint(color: AppTheme.bloodRed.withOpacity(0.3), duration: 200.ms),
+    );
   }
 
   Color _getBorderColor() {
     if (!player.isAlive) return Colors.white12;
-    if (isCurrentTurn) return const Color(0xFFD4AF37);
-    if (isTargetable) return Colors.redAccent;
-    return Colors.white24;
+    if (isCurrentTurn) return AppTheme.goldAccent;
+    if (isTargetable) return AppTheme.bloodRed;
+    return AppTheme.woodHighlight;
   }
 }
 
-// Thanh HP
+// Thanh HP bằng viên đạn
 class _HpBar extends StatelessWidget {
   final int hp;
   final int maxHp;
@@ -129,14 +249,14 @@ class _HpBar extends StatelessWidget {
       children: List.generate(maxHp, (index) {
         final filled = index < hp;
         return Container(
-          width: 10,
-          height: 10,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
+          width: 6,
+          height: 12,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: filled ? Colors.redAccent : Colors.white12,
+            borderRadius: BorderRadius.circular(2),
+            color: filled ? AppTheme.goldAccent : Colors.transparent,
             border: Border.all(
-              color: filled ? Colors.red : Colors.white24,
+              color: filled ? AppTheme.goldAccent : AppTheme.goldDim.withOpacity(0.5),
               width: 1,
             ),
           ),
@@ -145,6 +265,8 @@ class _HpBar extends StatelessWidget {
     );
   }
 }
+
+
 
 // Chip thông tin nhỏ
 class _InfoChip extends StatelessWidget {

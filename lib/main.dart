@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/theme/app_theme.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -24,9 +25,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Bang',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.brown),
-      ),
+      theme: AppTheme.theme,
       home: const HomeScreen(),
     );
   }

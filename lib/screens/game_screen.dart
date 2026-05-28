@@ -9,6 +9,8 @@ import '../core/services/range_calculator.dart';
 import '../providers/game_provider.dart';
 import '../widgets/card_widget.dart';
 import '../widgets/player_board.dart';
+import '../core/theme/app_theme.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -21,6 +23,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   CardModel? _selectedCard;
   PlayerModel? _panicTarget;
 
+  // Animation states
+  bool _isDrawing = false;
+  bool _isShooting = false;
+  bool _isDodging = false;
+  bool _isHit = false;
+
   @override
   Widget build(BuildContext context) {
     final gameState = ref.watch(gameProvider);
@@ -30,13 +38,30 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A0F08),
-      body: SafeArea(
-        child: Column(
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/board_background.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
           children: [
-            Expanded(flex: 3, child: _buildTopPlayers(gameState)),
-            Expanded(flex: 4, child: _buildGameTable(gameState)),
-            Expanded(flex: 3, child: _buildHandArea(gameState)),
+            SafeArea(
+              child: Column(
+                children: [
+                  Expanded(flex: 3, child: _buildTopPlayers(gameState)),
+                  Expanded(flex: 4, child: _buildGameTable(gameState)),
+                  Expanded(flex: 3, child: _buildHandArea(gameState)),
+                ],
+              ),
+            ),
+            
+            // ─── CINEMATIC VFX OVERLAYS ───
+            if (_isDrawing) _buildDrawOverlay(),
+            if (_isShooting) _buildShootingOverlay(),
+            if (_isDodging) _buildDodgeOverlay(),
+            if (_isHit) _buildHitOverlay(),
           ],
         ),
       ),
@@ -94,43 +119,47 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       margin: const EdgeInsets.all(8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFF2C1810),
+        color: AppTheme.woodBorder,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.woodHighlight, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Nhật ký',
-            style: TextStyle(
-              color: Color(0xFFD4AF37),
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
+            style: AppTheme.subtitleStyle.copyWith(fontSize: 12),
           ),
           const SizedBox(height: 4),
           Expanded(
-            child: ListView.builder(
-              reverse: true,
-              itemCount: state.actionLog.length,
-              itemBuilder: (context, index) {
-                final logIndex = state.actionLog.length - 1 - index;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    state.actionLog[logIndex],
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 9,
-                    ),
-                  ),
-                );
+            child: ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [Colors.white, Colors.white.withOpacity(0.0)],
+                  stops: const [0.8, 1.0],
+                ).createShader(bounds);
               },
+              child: ListView.builder(
+                reverse: true,
+                itemCount: state.actionLog.length,
+                itemBuilder: (context, index) {
+                  final logIndex = state.actionLog.length - 1 - index;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      state.actionLog[logIndex],
+                      style: AppTheme.normalText.copyWith(fontSize: 10),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
-    );
+    ).animate().slideX(begin: -0.2, curve: Curves.easeOut, duration: 400.ms).fadeIn();
   }
 
   Widget _buildDeckArea(GameState state) {
@@ -139,22 +168,26 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       children: [
         // Phase indicator
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFFD4AF37),
+            color: AppTheme.woodBorder,
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTheme.goldAccent),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Text(
             _getPhaseText(state.phase),
-            style: const TextStyle(
-              color: Color(0xFF2C1810),
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
+            style: AppTheme.cardTitleStyle.copyWith(color: AppTheme.goldAccent, fontSize: 12),
           ),
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
 
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -162,7 +195,59 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             // Deck
             Column(
               children: [
-                const CardBack(),
+                SizedBox(
+                  width: 40,
+                  height: 56,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Back-most card
+                      if (state.deck.length > 5)
+                        const Positioned(
+                          left: 4,
+                          top: 4,
+                          child: CardBack(width: 36, height: 52),
+                        ),
+                      // Middle card
+                      if (state.deck.length > 2)
+                        const Positioned(
+                          left: 2,
+                          top: 2,
+                          child: CardBack(width: 36, height: 52),
+                        ),
+                      // Top card
+                      if (state.deck.isNotEmpty)
+                        const Positioned(
+                          left: 0,
+                          top: 0,
+                          child: CardBack(width: 36, height: 52),
+                        )
+                      else
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          child: Container(
+                            width: 36,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Colors.white12,
+                              ),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.refresh,
+                                color: Colors.white24,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '${state.deck.length} lá',
@@ -181,31 +266,31 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   height: 52,
                   decoration: BoxDecoration(
                     color: state.discard.isNotEmpty
-                        ? const Color(0xFF3D2317)
-                        : Colors.transparent,
+                        ? Colors.transparent
+                        : const Color(0xFF1A0F08),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: state.discard.isNotEmpty
-                          ? Colors.white24
+                          ? Colors.transparent
                           : Colors.white12,
                     ),
                   ),
                   child: state.discard.isNotEmpty
-                      ? Center(
-                    child: Text(
-                      _getCardName(state.discard.last.type),
-                      style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 7,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
+                      ? Transform.rotate(
+                          angle: -0.06,
+                          child: FittedBox(
+                            fit: BoxFit.fill,
+                            child: CardWidget(
+                              card: state.discard.last,
+                              isPlayable: false,
+                            ),
+                          ),
+                        )
                       : const Icon(
-                    Icons.add,
-                    color: Colors.white12,
-                    size: 16,
-                  ),
+                          Icons.add,
+                          color: Colors.white12,
+                          size: 16,
+                        ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -217,7 +302,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
 
         Text(
           'Lượt: ${state.currentPlayer.name}',
@@ -239,8 +324,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               _ActionButton(
                 label: 'RÚT BÀI',
                 icon: Icons.download,
-                color: const Color(0xFF4CAF50),
-                onTap: () => ref.read(gameProvider.notifier).drawCards(),
+                color: Colors.greenAccent,
+                onTap: () {
+                  setState(() => _isDrawing = true);
+                  Future.delayed(const Duration(milliseconds: 700), () {
+                    if (mounted) {
+                      ref.read(gameProvider.notifier).drawCards();
+                      setState(() => _isDrawing = false);
+                    }
+                  });
+                },
               ),
 
             // Nút ĐÁNH BÀI phase
@@ -248,7 +341,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               _ActionButton(
                 label: 'KẾT THÚC',
                 icon: Icons.skip_next,
-                color: const Color(0xFFD4AF37),
+                color: AppTheme.goldAccent,
                 onTap: () {
                   setState(() {
                     _selectedCard = null;
@@ -298,9 +391,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3D2317),
+                  color: AppTheme.woodBorder,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFD4AF37)),
+                  border: Border.all(color: AppTheme.goldAccent),
                 ),
                 child: Column(
                   children: [
@@ -344,8 +437,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF2C1810),
+        color: AppTheme.woodBorder,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 10,
+            offset: Offset(0, -2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -359,28 +459,31 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     padding: EdgeInsets.only(right: 6),
                     child: Icon(
                       Icons.star,
-                      color: Color(0xFFD4AF37),
-                      size: 14,
+                      color: AppTheme.goldAccent,
+                      size: 16,
                     ),
                   ),
                 Text(
                   '${currentPlayer.name} — ${currentPlayer.character.displayName}',
-                  style: const TextStyle(
-                    color: Color(0xFFD4AF37),
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: AppTheme.subtitleStyle,
                 ),
                 const Spacer(),
-                // HP hearts
+                // HP hearts -> bullets
                 Row(
                   children: List.generate(currentPlayer.maxHp, (i) {
-                    return Icon(
-                      Icons.favorite,
-                      size: 12,
-                      color: i < currentPlayer.hp
-                          ? Colors.redAccent
-                          : Colors.white12,
+                    final filled = i < currentPlayer.hp;
+                    return Container(
+                      width: 6,
+                      height: 12,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        color: filled ? AppTheme.goldAccent : Colors.transparent,
+                        border: Border.all(
+                          color: filled ? AppTheme.goldAccent : AppTheme.goldDim.withOpacity(0.5),
+                          width: 1,
+                        ),
+                      ),
                     );
                   }),
                 ),
@@ -406,9 +509,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     child: CardWidget(
                       card: card,
                       isSelected: isSelected,
-                      isPlayable: (state.phase == GamePhase.play ||
-                          state.phase == GamePhase.discard) &&
-                          canPlay,
+                      isPlayable: state.phase == GamePhase.discard ||
+                          (state.phase == GamePhase.play && canPlay),
                       onTap: () => _onCardTapped(card, state),
                     ),
                   ),
@@ -525,7 +627,49 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return;
     }
 
-    // BANG, JAIL → targetId là player id
+    // BANG → Kích hoạt hiệu ứng bắn súng & né đạn / trúng đạn
+    if (_selectedCard!.type == CardType.bang) {
+      final targetId = target.id;
+      final cardToPlay = _selectedCard!;
+      
+      // Kiểm tra xem mục tiêu có lá MISS để né không
+      final hasMiss = target.hand.any((c) => c.type == CardType.miss);
+
+      setState(() {
+        _isShooting = true;
+      });
+
+      // Sau khi súng bắn rung lắc giật lùi (500ms), bắt đầu bay đạn
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        setState(() {
+          _isShooting = false;
+          if (hasMiss) {
+            _isDodging = true;
+          } else {
+            _isHit = true;
+          }
+        });
+
+        // Sau khi đạn dội khiên hoặc nổ trúng đích (700ms), tiến hành áp dụng lên logic game
+        Future.delayed(const Duration(milliseconds: 700), () {
+          if (!mounted) return;
+          ref.read(gameProvider.notifier).playCard(
+            cardToPlay,
+            targetId: targetId,
+          );
+          setState(() {
+            _isDodging = false;
+            _isHit = false;
+            _selectedCard = null;
+            _panicTarget = null;
+          });
+        });
+      });
+      return;
+    }
+
+    // JAIL → targetId là player id
     ref.read(gameProvider.notifier).playCard(
       _selectedCard!,
       targetId: target.id,
@@ -736,6 +880,158 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     CardType.mustang    => 'MUSTANG',
     CardType.scope      => 'SCOPE',
   };
+
+  // ─────────────────────────────────────────
+  // PREMIUM VFX OVERLAY BUILDERS
+  // ─────────────────────────────────────────
+
+  Widget _buildDrawOverlay() {
+    return Center(
+      child: const CardBack(width: 48, height: 70)
+          .animate()
+          .slideY(begin: -0.2, end: 1.0, duration: 600.ms, curve: Curves.easeInOutCubic)
+          .scaleXY(begin: 1.5, end: 0.8, duration: 600.ms)
+          .shimmer(duration: 500.ms, color: AppTheme.goldAccent.withOpacity(0.5))
+          .fadeOut(delay: 500.ms, duration: 100.ms),
+    );
+  }
+
+  Widget _buildShootingOverlay() {
+    return Center(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Dynamic Muzzle Flash
+          const Icon(
+            Icons.star,
+            color: Colors.amber,
+            size: 160,
+          )
+          .animate()
+          .scaleXY(begin: 0.1, end: 1.5, duration: 100.ms, curve: Curves.easeOut)
+          .fadeOut(duration: 200.ms),
+          
+          const Icon(
+            Icons.local_fire_department,
+            color: Colors.deepOrange,
+            size: 100,
+          )
+          .animate()
+          .scaleXY(begin: 0.1, end: 1.2, duration: 100.ms)
+          .fadeOut(duration: 200.ms),
+
+          // Vintage gun
+          Image.asset(
+            'assets/images/weapons.png',
+            width: 110,
+            height: 110,
+            fit: BoxFit.contain,
+          )
+          .animate()
+          .scaleXY(begin: 0.1, end: 1.3, duration: 300.ms, curve: Curves.elasticOut)
+          .shake(hz: 6, duration: 300.ms)
+          .then()
+          .scaleXY(begin: 1.0, end: 1.25, duration: 80.ms)
+          .fadeOut(delay: 300.ms, duration: 200.ms),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDodgeOverlay() {
+    return Stack(
+      children: [
+        // Bullet streak across center
+        Center(
+          child: const Icon(
+            Icons.arrow_right_alt,
+            color: AppTheme.goldAccent,
+            size: 48,
+          )
+          .animate()
+          .slideX(begin: -2.0, end: 2.0, duration: 300.ms, curve: Curves.easeIn)
+          .fadeOut(),
+        ),
+        
+        // Spinning shield & DODGED banner
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Spinning shield
+              const Icon(
+                Icons.shield,
+                color: Colors.greenAccent,
+                size: 72,
+              )
+              .animate()
+              .scaleXY(begin: 0.5, end: 1.2, duration: 300.ms, curve: Curves.elasticOut)
+              .rotate(end: 2, duration: 600.ms, curve: Curves.easeInOutCubic)
+              .fadeOut(delay: 500.ms),
+              
+              const SizedBox(height: 12),
+              
+              // Comic text banner
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.bloodRed,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.goldAccent, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'NÉ ĐẠN! (DODGED)',
+                  style: AppTheme.titleStyle.copyWith(
+                    fontSize: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+              .animate()
+              .scaleXY(begin: 0.2, end: 1.1, duration: 400.ms, curve: Curves.elasticOut)
+              .shake(hz: 8, duration: 400.ms)
+              .fadeOut(delay: 600.ms),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHitOverlay() {
+    return Stack(
+      children: [
+        // Red screen flash
+        Positioned.fill(
+          child: Container(
+            color: Colors.red.withOpacity(0.35),
+          )
+          .animate()
+          .fadeIn(duration: 100.ms)
+          .fadeOut(duration: 300.ms),
+        ),
+        
+        // Impact splat
+        Center(
+          child: const Icon(
+            Icons.broken_image,
+            color: Colors.redAccent,
+            size: 96,
+          )
+          .animate()
+          .scaleXY(begin: 0.1, end: 1.4, duration: 200.ms, curve: Curves.elasticOut)
+          .fadeOut(duration: 300.ms),
+        ),
+      ],
+    );
+  }
 }
 
 // ─────────────────────────────────────────
